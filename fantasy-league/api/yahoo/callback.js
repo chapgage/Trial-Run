@@ -34,6 +34,9 @@ export default async function handler(req, res) {
     return back({ yahoo: 'connected' })
   } catch (err) {
     console.error(err)
+    if (/not authorized to perform this action/i.test(err.message || '')) {
+      return back({ yahoo: 'pending', message: 'Yahoo login worked, but Yahoo has not approved this app for fantasy data yet. Scores will flow once that approval arrives; until then, type them in Settings.' })
+    }
     return back({ yahoo: 'error', message: err.message || 'Unknown error' })
   }
 }

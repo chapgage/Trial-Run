@@ -56,7 +56,8 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
 .form input {
   background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; color: var(--text);
 }
-.form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.form input:focus, .form textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.form textarea { background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; color: var(--text); resize: vertical; font-size: 0.9rem; }
 
 .btn {
   border: 1px solid var(--line); background: var(--panel-2); color: var(--text); border-radius: 10px;

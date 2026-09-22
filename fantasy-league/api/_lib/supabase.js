@@ -46,6 +46,7 @@ export const db = {
   setLeagueKey: (c, league_key) => serverRpc(c, 'ffl_server_set_league_key', { league_key }),
   insertBurn: (c, burn) => serverRpc(c, 'ffl_server_insert_burn', burn),
   chatContext: (c, message_limit) => serverRpc(c, 'ffl_server_chat_context', { message_limit }),
+  manualScores: (c) => serverRpc(c, 'ffl_server_get_manual_scores').then((rows) => rows?.[0] || null),
 }
 
 function bearer(req) {

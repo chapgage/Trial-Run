@@ -1,5 +1,6 @@
 import { supabase, isConfigured } from './supabase.js'
 import { api } from './api.js'
+import { parseManualScores, formatManualScores } from './manualScores.js'
 
 // ---------- Config ----------
 const AUTO_BURN_EVERY = 8          // write an automatic burn after this many new chat messages
@@ -292,6 +293,7 @@ function handleReturnParams() {
   if (params.get('yahoo') === 'connected') toast('Yahoo connected. Scores will appear shortly.', 'ok')
   if (params.get('yahoo') === 'pick') { toast('Yahoo connected. Pick which league to track in Settings.', 'info'); openSettings() }
   if (params.get('yahoo') === 'error') toast(`Yahoo connection failed: ${params.get('message') || 'unknown error'}`, 'error')
+  if (params.get('yahoo') === 'pending') { toast(params.get('message') || 'Yahoo approval pending.', 'info'); openSettings() }
   if (params.has('yahoo')) history.replaceState(null, '', location.pathname)
 }
 
@@ -361,7 +363,8 @@ function renderScoreboard() {
       el('div', { class: 'empty' },
         el('p', { text: needsSetup ? 'Scores are not connected yet.' : 'Could not load scores.' }),
         el('p', { class: 'muted small', text: err.message }),
-        state.member.is_commissioner && needsSetup && el('button', { type: 'button', class: 'btn btn-primary btn-sm', onClick: openSettings }, 'Open Settings')))
+        state.member.is_commissioner && needsSetup && el('button', { type: 'button', class: 'btn btn-primary btn-sm', onClick: openSettings }, 'Open Settings'),
+        !state.member.is_commissioner && needsSetup && el('p', { class: 'muted small', text: 'The commissioner can type this week\u2019s scores in Settings in the meantime.' })))
     return
   }
   const sb = state.scoreboard
@@ -381,7 +384,9 @@ function renderScoreboard() {
         teamRow(a, m), teamRow(b, m),
         winBar(a, b, m))
     }),
-    el('p', { class: 'muted small updated', text: `Updated ${new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · refreshes every minute` }),
+    el('p', { class: 'muted small updated', text: sb.source === 'manual'
+      ? `Entered by the commissioner${sb.updatedAt ? ' · ' + fmtTime(sb.updatedAt) : ''} · Yahoo takes over automatically once approved`
+      : `Updated ${new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · refreshes every minute` }),
   )
 }
 
@@ -522,6 +527,31 @@ async function openSettings() {
   const leaguePicker = el('div', { class: 'league-picker' })
   const yahooStatus = el('p', { class: 'muted small', text: 'Checking Yahoo connection…' })
 
+  // Manual scores (fallback while Yahoo approval is pending)
+  const weekInput = el('input', { name: 'manual_week', type: 'number', min: '1', max: '20', value: String(state.scoreboard?.week || 1), style: 'max-width:90px' })
+  const scoresInput = el('textarea', { name: 'manual_scores', rows: '6', class: 'mono', placeholder: 'Chap Attack 87.3 - Kat Kickers 101.1\nBench Warmers 120 - Punt Intended 64.2 final\nTeam A - Team B' })
+  const manualStatus = el('p', { class: 'muted small', text: 'One matchup per line: "Team A 87.3 - Team B 101.1". Add "final" at the end when a game is over; leave scores off for games not yet played.' })
+  const manualError = el('p', { class: 'error', hidden: true })
+  supabase.from('ffl_manual_scores').select('week, matchups, updated_at').order('week', { ascending: false }).limit(1).maybeSingle().then(({ data }) => {
+    if (data) { weekInput.value = String(data.week); scoresInput.value = formatManualScores(data.matchups); manualStatus.textContent = `Week ${data.week} scores last saved ${fmtTime(data.updated_at)}. Edit and save to update.` }
+  })
+  async function saveManualScores() {
+    manualError.hidden = true
+    const week = Number(weekInput.value)
+    const { matchups, errors } = parseManualScores(scoresInput.value)
+    if (!week || week < 1 || week > 20) { manualError.textContent = 'Week must be between 1 and 20.'; manualError.hidden = false; return }
+    if (errors.length) { manualError.textContent = errors.join(' '); manualError.hidden = false; return }
+    if (!matchups.length) {
+      const { error: dErr } = await supabase.from('ffl_manual_scores').delete().eq('week', week)
+      if (dErr) { manualError.textContent = dErr.message; manualError.hidden = false; return }
+      toast(`Week ${week} manual scores cleared.`, 'ok'); refreshScoreboard(); return
+    }
+    const { error: uErr } = await supabase.from('ffl_manual_scores').upsert({ week, matchups, updated_by: state.member.user_id, updated_at: new Date().toISOString() })
+    if (uErr) { manualError.textContent = uErr.message; manualError.hidden = false; return }
+    toast(`Week ${week} scores saved (${matchups.length} matchup${matchups.length === 1 ? '' : 's'}).`, 'ok')
+    refreshScoreboard()
+  }
+
   const dialog = el('dialog', { id: 'settings', class: 'dialog' },
     el('form', { method: 'dialog', class: 'form', onSubmit: async (event) => {
       event.preventDefault()
@@ -555,6 +585,13 @@ async function openSettings() {
         el('button', { type: 'button', class: 'btn btn-ghost btn-sm', onClick: loadLeaguePicker }, 'Find my leagues')),
       leaguePicker,
       el('label', {}, 'Yahoo league key', keyInput),
+      el('hr'),
+      el('h3', { text: 'Type in scores (while Yahoo approval is pending)' }),
+      manualStatus,
+      el('label', {}, 'Week', weekInput),
+      el('label', {}, 'Matchups', scoresInput),
+      manualError,
+      el('div', { class: 'row' }, el('button', { type: 'button', class: 'btn btn-primary btn-sm', onClick: saveManualScores }, 'Save scores')),
       error,
       el('div', { class: 'row end' },
         el('button', { type: 'button', class: 'btn btn-ghost', onClick: () => dialog.close() }, 'Cancel'),

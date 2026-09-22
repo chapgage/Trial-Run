@@ -2,7 +2,7 @@
 
 Private website for a Yahoo fantasy football league. Members sign in with an invite code and get:
 
-- **Scoreboard**: this week's matchups from Yahoo Fantasy, with live points, projections and win probability. Refreshes every minute.
+- **Scoreboard**: this week's matchups from Yahoo Fantasy, with live points, projections and win probability. Refreshes every minute. While Yahoo API approval is pending (Yahoo gates Fantasy Sports API access behind an application since mid-2026), the commissioner can type the week's matchups into Settings and the site uses those instead.
 - **Chat**: a realtime league group chat.
 - **Burn board**: a Claude-written roast ("burn") plus a discussion prompt, grounded in the live scores and whatever the chat has been saying. One is written automatically every 8 chat messages, on demand with the 🔥 button, and once a week by a Sunday cron.
 
@@ -25,7 +25,7 @@ Accounts are created by that function with `email_confirm: true`, so Supabase's 
 
 ### 2. Yahoo developer app
 
-Yahoo has no API keys per user; the site uses OAuth and the commissioner connects once.
+Yahoo has no API keys per user; the site uses OAuth and the commissioner connects once. **Since 2026 Yahoo requires approval for Fantasy Sports API access**: apply at <https://sports.yahoo.com/developer/access/> (personal / single-league use is allowed) and sign the API Access and Use Agreement. Until approved, every fantasy endpoint returns 403 "This application is not authorized to perform this action" and the site falls back to manually entered scores.
 
 1. Go to <https://developer.yahoo.com/apps/create/> and sign in with the Yahoo account that owns the league.
 2. Application type: **Web Application**. Redirect URI(s): `https://<your-vercel-domain>/api/yahoo/callback`. API permissions: **Fantasy Sports → Read**.
@@ -97,6 +97,7 @@ test/                   node:test unit tests
 | `ffl_burns` | generated burns | members read; server inserts |
 | `ffl_yahoo_tokens` | Yahoo OAuth tokens | nobody; server only via `ffl_server_*` functions |
 | `ffl_server_secret` | the shared secret the server presents | nobody |
+| `ffl_manual_scores` | commissioner-typed matchups per week (fallback) | members read; commissioner writes |
 
 Members are created by the `ffl-signup` edge function (service role, checks the invite code). `ffl_join_league(code, display_name, team_name)` remains for an existing login that has no member row yet.
 
