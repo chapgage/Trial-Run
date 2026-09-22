@@ -38,3 +38,7 @@ The `guestbook` table lives in the `public` schema with Row Level Security enabl
 - nobody can update or delete from the browser
 
 The migration is recorded in the Supabase project (`create_guestbook`).
+
+## Also in this repo: League HQ (`fantasy-league/`)
+
+A second, separate site for a Yahoo fantasy football league: invite-only login, live Yahoo scoreboard, realtime chat, and Claude-written "burns". It has its own Supabase project, its own Vercel project (root directory `fantasy-league`), and its own README with setup steps: [fantasy-league/README.md](fantasy-league/README.md).
