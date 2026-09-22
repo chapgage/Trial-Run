@@ -6,11 +6,11 @@ import { tokenRow, accessToken, yahooGet, parseLeagues } from '../_lib/yahoo.js'
 export default async function handler(req, res) {
   if (!methodGuard(req, res, ['GET'])) return
   try {
-    const { admin } = await requireMember(req, { commissioner: true })
-    const row = await tokenRow(admin)
+    const { client } = await requireMember(req, { commissioner: true })
+    const row = await tokenRow(client)
     const result = { connected: Boolean(row), tokenUpdatedAt: row?.updated_at || null }
     if (req.query.discover && row) {
-      const token = await accessToken(admin, req)
+      const token = await accessToken(client, req)
       const json = await yahooGet(token, 'users;use_login=1/games;game_keys=nfl/leagues')
       result.leagues = parseLeagues(json)
     }

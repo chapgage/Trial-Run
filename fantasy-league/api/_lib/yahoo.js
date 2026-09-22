@@ -1,4 +1,4 @@
-import { HttpError } from './supabase.js'
+import { HttpError, db } from './supabase.js'
 
 const AUTH_URL = 'https://api.login.yahoo.com/oauth2/request_auth'
 const TOKEN_URL = 'https://api.login.yahoo.com/oauth2/get_token'
@@ -51,33 +51,26 @@ export function exchangeCode(req, code) {
   return tokenRequest(req, { grant_type: 'authorization_code', code })
 }
 
-export async function saveTokens(admin, tokens) {
-  const row = {
-    id: 1,
+export async function saveTokens(client, tokens) {
+  return db.saveYahooTokens(client, {
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
     expires_at: new Date(Date.now() + (Number(tokens.expires_in || 3600) - 60) * 1000).toISOString(),
     yahoo_guid: tokens.xoauth_yahoo_guid || null,
-    updated_at: new Date().toISOString(),
-  }
-  const { error } = await admin.from('ffl_yahoo_tokens').upsert(row)
-  if (error) throw error
-  return row
+  })
 }
 
-export async function tokenRow(admin) {
-  const { data, error } = await admin.from('ffl_yahoo_tokens').select('*').eq('id', 1).maybeSingle()
-  if (error) throw error
-  return data
+export function tokenRow(client) {
+  return db.yahooTokens(client)
 }
 
 // Returns a valid access token, refreshing it when it has expired.
-export async function accessToken(admin, req) {
-  const row = await tokenRow(admin)
+export async function accessToken(client, req) {
+  const row = await tokenRow(client)
   if (!row) throw new HttpError(409, 'Yahoo is not connected yet. The commissioner can connect it in Settings.')
   if (new Date(row.expires_at) > new Date()) return row.access_token
   const fresh = await tokenRequest(req, { grant_type: 'refresh_token', refresh_token: row.refresh_token })
-  const saved = await saveTokens(admin, { ...fresh, refresh_token: fresh.refresh_token || row.refresh_token })
+  const saved = await saveTokens(client, { ...fresh, refresh_token: fresh.refresh_token || row.refresh_token })
   return saved.access_token
 }
 

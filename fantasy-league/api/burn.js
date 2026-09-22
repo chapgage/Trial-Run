@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { adminClient, requireMember, isCronCall, sendError, methodGuard, HttpError } from './_lib/supabase.js'
+import { serverClient, requireMember, isCronCall, sendError, methodGuard, HttpError, db } from './_lib/supabase.js'
 import { describeScoreboard } from './_lib/yahoo.js'
 import { loadScoreboard } from './scoreboard.js'
 
@@ -94,31 +94,27 @@ async function writeBurn(client, userMessage) {
 export default async function handler(req, res) {
   if (!methodGuard(req, res, ['POST', 'GET'])) return
   try {
-    let admin, member = null, source
+    let client, member = null, source
     if (req.method === 'GET') {
       if (!isCronCall(req)) throw new HttpError(401, 'Cron secret required.')
-      admin = adminClient()
+      client = serverClient()
       source = 'cron'
     } else {
-      ;({ admin, member } = await requireMember(req))
+      ;({ client, member } = await requireMember(req))
       source = req.body?.force ? 'manual' : 'auto'
     }
 
     if (!process.env.ANTHROPIC_API_KEY) throw new HttpError(500, 'ANTHROPIC_API_KEY is not set on the server.')
 
-    const { data: latest } = await admin
-      .from('ffl_burns').select('*').order('id', { ascending: false }).limit(1).maybeSingle()
+    const ctx = await db.chatContext(client, CHAT_WINDOW)
+    const latest = ctx.latest_burn || null
     if (source !== 'manual' && latest && Date.now() - new Date(latest.created_at).getTime() < COOLDOWN_MS) {
       return res.status(200).json({ skipped: true, burn: latest })
     }
 
-    const [{ data: league }, { data: members }, { data: rawMessages }] = await Promise.all([
-      admin.from('ffl_league').select('name').eq('id', 1).maybeSingle(),
-      admin.from('ffl_members').select('user_id, display_name, team_name, is_commissioner'),
-      admin.from('ffl_messages').select('id, user_id, body, created_at').order('id', { ascending: false }).limit(CHAT_WINDOW),
-    ])
-    const names = new Map((members || []).map((m) => [m.user_id, m.display_name]))
-    const messages = (rawMessages || []).reverse().map((m) => ({ ...m, name: names.get(m.user_id) || 'Someone' }))
+    const members = ctx.members || []
+    const names = new Map(members.map((m) => [m.user_id, m.display_name]))
+    const messages = (ctx.messages || []).map((m) => ({ ...m, name: names.get(m.user_id) || 'Someone' }))
 
     if (source === 'auto' && latest && !messages.some((m) => m.id > (latest.last_message_id ?? 0))) {
       return res.status(200).json({ skipped: true, burn: latest })
@@ -126,33 +122,28 @@ export default async function handler(req, res) {
 
     let scoreboardText = 'Scoreboard unavailable right now.'
     try {
-      scoreboardText = describeScoreboard(await loadScoreboard(admin, req))
+      scoreboardText = describeScoreboard(await loadScoreboard(client, req))
     } catch (err) {
       console.warn('scoreboard unavailable for burn:', err.message)
     }
 
-    const client = new Anthropic()
-    const result = await writeBurn(client, buildUserMessage({
-      leagueName: league?.name || 'The League',
+    const anthropic = new Anthropic()
+    const result = await writeBurn(anthropic, buildUserMessage({
+      leagueName: ctx.league?.name || 'The League',
       scoreboardText,
-      members: members || [],
+      members,
       messages,
     }))
 
-    const { data: burn, error } = await admin
-      .from('ffl_burns')
-      .insert({
-        target: String(result.target || '').slice(0, 80) || null,
-        headline: String(result.headline || 'Burn').slice(0, 140),
-        burn: String(result.burn || '').slice(0, 1200),
-        prompt: String(result.prompt || '').slice(0, 400),
-        source,
-        requested_by: member?.user_id || null,
-        last_message_id: messages.length ? messages[messages.length - 1].id : latest?.last_message_id ?? null,
-      })
-      .select()
-      .single()
-    if (error) throw error
+    const burn = await db.insertBurn(client, {
+      target: String(result.target || '').slice(0, 80) || null,
+      headline: String(result.headline || 'Burn').slice(0, 140),
+      burn: String(result.burn || '').slice(0, 1200),
+      prompt: String(result.prompt || '').slice(0, 400),
+      source,
+      requested_by: member?.user_id || null,
+      last_message_id: messages.length ? messages[messages.length - 1].id : latest?.last_message_id ?? null,
+    })
 
     res.status(200).json({ burn })
   } catch (err) {

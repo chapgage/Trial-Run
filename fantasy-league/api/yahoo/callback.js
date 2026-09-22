@@ -1,4 +1,4 @@
-import { adminClient, sendError, methodGuard } from '../_lib/supabase.js'
+import { serverClient, db, methodGuard } from '../_lib/supabase.js'
 import { exchangeCode, saveTokens, yahooGet, parseLeagues } from '../_lib/yahoo.js'
 
 // GET /api/yahoo/callback?code=...&state=...  Yahoo sends the commissioner back here.
@@ -15,12 +15,12 @@ export default async function handler(req, res) {
       return back({ yahoo: 'error', message: 'Login state did not match. Try connecting again.' })
     }
 
-    const admin = adminClient()
+    const client = serverClient()
     const tokens = await exchangeCode(req, code)
-    await saveTokens(admin, tokens)
+    await saveTokens(client, tokens)
 
     // Pick the league automatically when there is an obvious answer.
-    const { data: league } = await admin.from('ffl_league').select('yahoo_league_key').eq('id', 1).maybeSingle()
+    const league = await db.league(client)
     if (!league?.yahoo_league_key) {
       let key = process.env.YAHOO_LEAGUE_KEY || null
       if (!key) {
@@ -29,7 +29,7 @@ export default async function handler(req, res) {
         if (leagues.length === 1) key = leagues[0].key
         else return back({ yahoo: 'pick' })
       }
-      await admin.from('ffl_league').update({ yahoo_league_key: key }).eq('id', 1)
+      await db.setLeagueKey(client, key)
     }
     return back({ yahoo: 'connected' })
   } catch (err) {

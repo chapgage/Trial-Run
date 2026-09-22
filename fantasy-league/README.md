@@ -41,7 +41,8 @@ Create a key at <https://platform.claude.com/> and set `ANTHROPIC_API_KEY`. The 
 | `VITE_SUPABASE_URL` | browser | Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | browser | Supabase anon / publishable key |
 | `SUPABASE_URL` | functions | same project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | functions | Supabase **service_role** key (Project Settings → API). Secret. |
+| `SUPABASE_ANON_KEY` | functions | same anon / publishable key |
+| `FFL_SERVER_SECRET` | functions | random string that must equal the value in the `ffl_server_secret` table. Secret. |
 | `ANTHROPIC_API_KEY` | functions | Claude API key. Secret. |
 | `YAHOO_CLIENT_ID` | functions | from the Yahoo app |
 | `YAHOO_CLIENT_SECRET` | functions | from the Yahoo app. Secret. |
@@ -78,7 +79,7 @@ api/                    Vercel serverless functions (Node, ESM)
   yahoo/connect.js      POST commish   start Yahoo OAuth
   yahoo/callback.js     GET            Yahoo redirects here; stores tokens, picks the league
   yahoo/leagues.js      GET  commish   connection status, optional league discovery
-  _lib/supabase.js      service-role client, membership check, error helpers
+  _lib/supabase.js      server client, ffl_server_* data helpers, membership check
   _lib/yahoo.js         token refresh, API calls, payload parsing
 supabase/migrations/    schema, RLS policies, join function
 test/                   node:test unit tests
@@ -92,6 +93,9 @@ test/                   node:test unit tests
 | `ffl_members` | one row per member; first joiner is commissioner | members read; each updates own row |
 | `ffl_messages` | chat | members read; insert as self |
 | `ffl_burns` | generated burns | members read; server inserts |
-| `ffl_yahoo_tokens` | Yahoo OAuth tokens | nobody; server only |
+| `ffl_yahoo_tokens` | Yahoo OAuth tokens | nobody; server only via `ffl_server_*` functions |
+| `ffl_server_secret` | the shared secret the server presents | nobody |
 
 `ffl_join_league(code, display_name, team_name)` is the only way to become a member.
+
+To rotate the server secret: generate a new random string, `update ffl_server_secret set secret = '...'`, set the same value as `FFL_SERVER_SECRET` in Vercel, and redeploy.
