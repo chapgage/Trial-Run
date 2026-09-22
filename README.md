@@ -27,10 +27,7 @@ Both are public values that are safe to ship to the browser. They are set in the
 
 The site is deployed to Vercel as the `ypo-workshop` project. Production URL: https://ypo-workshop-sgc24.vercel.app
 
-Deployments are currently pushed to Vercel directly after each change to `main`. To have Vercel deploy
-automatically on every push instead, connect GitHub to the Vercel account
-(Vercel dashboard → Settings → Login Connections → GitHub), then open the `ypo-workshop` project and
-link it to the `chapgage/Trial-Run` repository under Settings → Git.
+Vercel is linked to this GitHub repository. Every push to `main` builds and deploys to production automatically.
 
 ## Database
 
