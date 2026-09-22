@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YPO Workshop</title>
+    <meta name="description" content="Starter site for the YPO Workshop, deployed on Vercel and backed by Supabase." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <p class="eyebrow">Starter site</p>
+        <h1>YPO Workshop</h1>
+        <p class="lede">
+          A small site built with Vite, deployed on Vercel, and connected to a Supabase database.
+          Leave a note below to see the database in action.
+        </p>
+        <p id="status" class="status status-pending">Connecting to Supabase…</p>
+      </header>
+
+      <section class="card">
+        <h2>Sign the guestbook</h2>
+        <form id="guestbook-form" class="form">
+          <label>
+            Name
+            <input name="name" type="text" maxlength="60" required autocomplete="name" placeholder="Your name" />
+          </label>
+          <label>
+            Message
+            <textarea name="message" maxlength="280" rows="3" required placeholder="Say hello…"></textarea>
+          </label>
+          <button type="submit" id="submit-btn">Post</button>
+          <p id="form-error" class="error" hidden></p>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Recent entries</h2>
+        <ul id="entries" class="entries">
+          <li class="muted">Loading…</li>
+        </ul>
+      </section>
+
+      <footer class="footer">
+        <p>Built with Vite · Hosted on Vercel · Data in Supabase</p>
+      </footer>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
