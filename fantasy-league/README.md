@@ -11,7 +11,7 @@ Built with [Vite](https://vite.dev), hosted on [Vercel](https://vercel.com) (sta
 ## How access works
 
 1. The commissioner shares the **invite code** (or the invite link, which pre-fills it) with league members only.
-2. A member creates an account (email + password), then enters the invite code once. That creates their `ffl_members` row.
+2. A member fills in the "New here? Join" form: invite code, name, email, password. The `ffl-signup` edge function (in `supabase/functions/`) checks the code, creates the login already confirmed so no email link is needed, and adds their `ffl_members` row. They are signed in immediately.
 3. Every table is protected by Row Level Security: without a member row you cannot read or write anything, even with a valid login. The Yahoo tokens table has no client policies at all and is only touched by the serverless functions.
 4. The **first person to join becomes commissioner**. The commissioner sees Settings: league name, invite code, and the Yahoo connection.
 
@@ -19,7 +19,9 @@ Built with [Vite](https://vite.dev), hosted on [Vercel](https://vercel.com) (sta
 
 ### 1. Supabase
 
-The schema is in `supabase/migrations/`. It has already been applied to the league's Supabase project. To set up a fresh project, run that SQL in the SQL editor, then in **Authentication → URL Configuration** set the Site URL to the deployed domain (and add `http://localhost:5173` for local dev). Optionally turn off "Confirm email" under **Authentication → Providers → Email** so new members skip the confirmation step.
+The schema is in `supabase/migrations/` and the signup function in `supabase/functions/ffl-signup/`. Both are already deployed to the league's Supabase project. For a fresh project: run the migrations in the SQL editor, insert a row into `ffl_server_secret`, and deploy the function with `supabase functions deploy ffl-signup --no-verify-jwt` (it must accept the publishable key, which is not a JWT; the invite code is its authentication).
+
+Accounts are created by that function with `email_confirm: true`, so Supabase's built-in email service (limited to a few messages per hour, and only to project owners on new projects) is never used. Password resets would still need email; set up custom SMTP under **Authentication → SMTP Settings** if you want those.
 
 ### 2. Yahoo developer app
 
@@ -96,6 +98,6 @@ test/                   node:test unit tests
 | `ffl_yahoo_tokens` | Yahoo OAuth tokens | nobody; server only via `ffl_server_*` functions |
 | `ffl_server_secret` | the shared secret the server presents | nobody |
 
-`ffl_join_league(code, display_name, team_name)` is the only way to become a member.
+Members are created by the `ffl-signup` edge function (service role, checks the invite code). `ffl_join_league(code, display_name, team_name)` remains for an existing login that has no member row yet.
 
 To rotate the server secret: generate a new random string, `update ffl_server_secret set secret = '...'`, set the same value as `FFL_SERVER_SECRET` in Vercel, and redeploy.

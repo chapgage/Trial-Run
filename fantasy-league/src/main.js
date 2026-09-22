@@ -77,13 +77,17 @@ function renderAuth(mode = 'signin') {
   const isJoin = mode === 'join'
 
   const form = el('form', { class: 'form', onSubmit: onSubmit },
+    isJoin && el('label', {}, 'Invite code',
+      el('input', { name: 'code', type: 'text', required: true, autocomplete: 'off', value: params.get('code') || '', placeholder: 'From the commissioner', class: 'mono' })),
     isJoin && el('label', {}, 'Your name (how the league sees you)',
       el('input', { name: 'display_name', type: 'text', required: true, maxlength: '40', autocomplete: 'nickname', placeholder: 'e.g. Chap' })),
+    isJoin && el('label', {}, 'Your team name (optional)',
+      el('input', { name: 'team_name', type: 'text', maxlength: '60', placeholder: 'Match your Yahoo team name so scores line up' })),
     el('label', {}, 'Email',
       el('input', { name: 'email', type: 'email', required: true, autocomplete: 'email', placeholder: 'you@example.com' })),
     el('label', {}, 'Password',
       el('input', { name: 'password', type: 'password', required: true, minlength: '8', autocomplete: isJoin ? 'new-password' : 'current-password', placeholder: isJoin ? 'At least 8 characters' : '••••••••' })),
-    el('button', { type: 'submit', class: 'btn btn-primary' }, isJoin ? 'Create account' : 'Sign in'),
+    el('button', { type: 'submit', class: 'btn btn-primary' }, isJoin ? 'Create account & join' : 'Sign in'),
     error, notice,
   )
 
@@ -98,22 +102,30 @@ function renderAuth(mode = 'signin') {
     button.disabled = true
     try {
       if (isJoin) {
-        const display_name = String(data.get('display_name')).trim()
-        const { data: result, error: err } = await supabase.auth.signUp({
-          email, password,
-          options: { data: { display_name }, emailRedirectTo: location.origin + location.search },
+        // Accounts are created by the ffl-signup edge function: it checks the invite code,
+        // creates the login already confirmed (no email step), and adds the member row.
+        notice.textContent = 'Creating your account…'
+        notice.hidden = false
+        const { error: fnError } = await supabase.functions.invoke('ffl-signup', {
+          body: {
+            email, password,
+            display_name: String(data.get('display_name')).trim(),
+            team_name: String(data.get('team_name') || '').trim() || null,
+            code: String(data.get('code')).trim(),
+          },
         })
-        if (err) throw err
-        if (!result.session) {
-          notice.textContent = 'Check your email for a confirmation link, then come back and sign in. Your invite code is needed on the next step.'
-          notice.hidden = false
-          return
+        if (fnError) {
+          let message = fnError.message || 'Could not create the account.'
+          try { message = (await fnError.context?.json())?.error || message } catch { /* keep default */ }
+          throw new Error(message)
         }
-      } else {
-        const { error: err } = await supabase.auth.signInWithPassword({ email, password })
-        if (err) throw err
+        notice.textContent = 'Account created. Signing you in…'
+        history.replaceState(null, '', location.pathname)
       }
+      const { error: err } = await supabase.auth.signInWithPassword({ email, password })
+      if (err) throw err
     } catch (err) {
+      notice.hidden = true
       error.textContent = err.message || 'Something went wrong.'
       error.hidden = false
     } finally {
@@ -132,7 +144,6 @@ function renderAuth(mode = 'signin') {
           el('button', { type: 'button', class: `seg ${isJoin ? 'active' : ''}`, onClick: () => renderAuth('join') }, 'New here? Join'),
         ),
         form,
-        params.get('code') && el('p', { class: 'muted small', text: 'Invite code detected. You will enter it after creating your account.' }),
       ),
     ),
   )
